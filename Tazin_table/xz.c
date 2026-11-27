@@ -1,18 +1,31 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <ctype.h>
+#include <string.h>
 #include <windows.h>
 
 #define SIZE 10
 #define TOTAL_SHIP_CELLS 20 /* Всего палуб во флоте (4 + 3*2 + 2*3 + 1*4 = 20) */
 
+const char *COLS_UPPER[SIZE] = {"А", "Б", "В", "Г", "Д", "Е", "Ё", "Ж", "З", "И"};
+const char *COLS_LOWER[SIZE] = {"а", "б", "в", "г", "д", "е", "ё", "ж", "з", "и"};
+
 typedef struct {
     int length;
     int row;          /* 0..9 (соответствует строкам 1..10) */
-    int col;          /* 0..9 (соответствует столбцам A..J) */
+    int col;          /* 0..9 (соответствует столбцам А..И) */
     int isHorizontal; /* 1 - горизонтально, 0 - вертикально */
     int hits;
 } Ship;
+
+int getColIndex(const char *str) {
+    int j;
+    for (j = 0; j < SIZE; j++) {
+        if (strcmp(str, COLS_UPPER[j ]) == 0 || strcmp(str, COLS_LOWER[j ]) == 0) {
+            return j;
+        }
+    }
+    return -1;
+}
 
 void initBoard(char board[SIZE][SIZE], char fillChar) {
     int i, j;
@@ -46,13 +59,12 @@ void placeShips(char board[SIZE][SIZE], Ship ships[], int shipCount) {
 void printBoard(const char board[SIZE][SIZE], const char *title) {
     int i, j;
     printf("\n=== %s ===\n", title);
-    printf("     ");
+    printf("    ");
     for (j = 0; j < SIZE; j++) {
-        printf("%c  ", (char)('A' + j));
+        printf("%s ", COLS_UPPER[j]);
     }
     printf("\n");
-
-    printf("    ");
+    printf("   ");
     for (j = 0; j < SIZE * 3; j++) {
         printf("-");
     }
@@ -65,9 +77,8 @@ void printBoard(const char board[SIZE][SIZE], const char *title) {
         } else {
             printf("%d |", in);
         }
-
         for (j = 0; j < SIZE; j++) {
-            printf("%c  ", board[i][j]);
+            printf("%c ", board[i][j]);
         }
         printf("\n");
     }
@@ -79,7 +90,6 @@ int processShot(int r, int c, char targetFleet[SIZE][SIZE], char shooterTracking
         int s, k;
         targetFleet[r][c] = 'X';
         shooterTracking[r][c] = 'X';
-
         for (s = 0; s < shipCount; s++) {
             for (k = 0; k < targetShips[s].length; k++) {
                 int sr = targetShips[s].isHorizontal ? targetShips[s].row : targetShips[s].row + k;
@@ -95,7 +105,7 @@ int processShot(int r, int c, char targetFleet[SIZE][SIZE], char shooterTracking
         }
         return 1;
     } else {
-        if (targetFleet[r][c] == '.') {
+        if (targetFleet[r][c] == '. ') {
             targetFleet[r][c] = '*';
         }
         shooterTracking[r][c] = '*';
@@ -142,23 +152,21 @@ void renderScreen(const char p1Shots[SIZE][SIZE], const char p1Fleet[SIZE][SIZE]
 /* Ход 1-го игрока с ручным вводом результата попадания */
 void takeManualShotP1(char shooterTracking[SIZE][SIZE], char statusOut[256]) {
     int rInput = 0;
-    char colChar = 0;
+    char colStr[8];
     int r, c, res;
 
     while (1) {
         printf("\nПервый, введи координаты выстрела: ");
         fflush(stdout);
-
-        if (scanf("%d %c", &rInput, &colChar) != 2) {
+        if (scanf("%d %7s", &rInput, colStr) != 2) {
             clearInputBuffer();
-            printf("Введи от 1 до 10 ярдов по вертикали и от A до J по горизонтали, например 3 A. Давай ещё раз..\n");
+            printf("Введи от 1 до 10 ярдов по вертикали и от А до И по горизонтали, например 3 А. Давай ещё раз..\n");
             continue;
         }
         clearInputBuffer();
 
-        colChar = (char)toupper((unsigned char)colChar);
         r = rInput - 1;
-        c = colChar - 'A';
+        c = getColIndex(colStr);
 
         if (r < 0 || r >= SIZE || c < 0 || c >= SIZE) {
             printf("Ты пытаешься подорвать мину за пределами моря.....\n");
@@ -166,13 +174,13 @@ void takeManualShotP1(char shooterTracking[SIZE][SIZE], char statusOut[256]) {
         }
 
         if (shooterTracking[r][c] != '.') {
-            printf("Мина на (%d, %c) уже взорвана, давай другую!\n", rInput, colChar);
+            printf("Мина на (%d, %s) уже взорвана, давай другую!\n", rInput, COLS_UPPER[c]);
             continue;
         }
 
         /* Ручной выбор результата попадания */
         while (1) {
-            printf("Ты подорвал подлодку второго юнги? в (%d, %c)? (0 - мимо, 1 - ранил, 2 - потопил): ", rInput, colChar);
+            printf("Ты подорвал подлодку второго юнги? в (%d, %s)? (0 - мимо, 1 - ранил, 2 - потопил): ", rInput, COLS_UPPER[c]);
             fflush(stdout);
             if (scanf("%d", &res) == 1 && (res == 0 || res == 1 || res == 2)) {
                 clearInputBuffer();
@@ -184,15 +192,14 @@ void takeManualShotP1(char shooterTracking[SIZE][SIZE], char statusOut[256]) {
 
         if (res == 2) {
             shooterTracking[r][c] = 'X';
-            snprintf(statusOut, 256, "Юнга 1 взорвал мину в (%d, %c): Есть пробитие (потопил)!", rInput, colChar);
+            snprintf(statusOut, 256, "Юнга 1 взорвал мину в (%d, %s): Есть пробитие (потопил)!", rInput, COLS_UPPER[c]);
         } else if (res == 1) {
             shooterTracking[r][c] = 'X';
-            snprintf(statusOut, 256, "Юнга 1 взорвал мину в (%d, %c): Не пробил, но поцарапал (ранил)!", rInput, colChar);
+            snprintf(statusOut, 256, "Юнга 1 взорвал мину в (%d, %s): Не пробил, но поцарапал (ранил)!", rInput, COLS_UPPER[c]);
         } else {
             shooterTracking[r][c] = '*';
-            snprintf(statusOut, 256, "Юнга 1 взорвал мину в (%d, %c): Пустышка (мимо).", rInput, colChar);
+            snprintf(statusOut, 256, "Юнга 1 взорвал мину в (%d, %s): Пустышка (мимо).", rInput, COLS_UPPER[c]);
         }
-
         return;
     }
 }
@@ -206,23 +213,21 @@ void takeAutoShotP2(
     char statusOut[256]
 ) {
     int rInput = 0;
-    char colChar = 0;
+    char colStr[8];
     int r, c, res;
 
     while (1) {
-        printf("\nВторой, взрывай уже с 1 до 10 и с A до J! ");
+        printf("\nВторой, взрывай уже с 1 до 10 и с А до И! ");
         fflush(stdout);
-
-        if (scanf("%d %c", &rInput, &colChar) != 2) {
+        if (scanf("%d %7s", &rInput, colStr) != 2) {
             clearInputBuffer();
-            printf("Введи от 1 до 10 ярдов по вертикали и от A до J по горизонтали например 3 A. Давай ещё раз..\n");
+            printf("Введи от 1 до 10 ярдов по вертикали и от А до И по горизонтали например 3 А. Давай ещё раз..\n");
             continue;
         }
         clearInputBuffer();
 
-        colChar = (char)toupper((unsigned char)colChar);
         r = rInput - 1;
-        c = colChar - 'A';
+        c = getColIndex(colStr);
 
         if (r < 0 || r >= SIZE || c < 0 || c >= SIZE) {
             printf("Ты пытаешься подорвать мину за пределами моря.....\n");
@@ -230,20 +235,18 @@ void takeAutoShotP2(
         }
 
         if (shooterTracking[r][c] != '.') {
-            printf("Мина на (%d, %c) уже взорвана, давай другую!\n", rInput, colChar);
+            printf("Мина на (%d, %s) уже взорвана, давай другую!\n", rInput, COLS_UPPER[c]);
             continue;
         }
 
         res = processShot(r, c, targetFleet, shooterTracking, targetShips, shipCount);
-
         if (res == 2) {
-            snprintf(statusOut, 256, "Юнга 2 взорвал мину в (%d, %c): Есть пробитие!", rInput, colChar);
+            snprintf(statusOut, 256, "Юнга 2 взорвал мину в (%d, %s): Есть пробитие!", rInput, COLS_UPPER[c]);
         } else if (res == 1) {
-            snprintf(statusOut, 256, "Юнга 2 взорвал мину в (%d, %c): Не пробил, но поцарапал!", rInput, colChar);
+            snprintf(statusOut, 256, "Юнга 2 взорвал мину в (%d, %s): Не пробил, но поцарапал!", rInput, COLS_UPPER[c]);
         } else {
-            snprintf(statusOut, 256, "Юнга 2 взорвал мину в (%d, %c): Пустышка.", rInput, colChar);
+            snprintf(statusOut, 256, "Юнга 2 взорвал мину в (%d, %s): Пустышка.", rInput, COLS_UPPER[c]);
         }
-
         return;
     }
 }
@@ -252,7 +255,6 @@ int main(void) {
     char p1Fleet[SIZE][SIZE];
     char p1Shots[SIZE][SIZE];
     char p2Shots[SIZE][SIZE];
-
     Ship p1Ships[10] = {
         {4, 0, 0, 0, 0},
         {3, 0, 2, 1, 0},
@@ -266,7 +268,6 @@ int main(void) {
         {1, 6, 6, 1, 0}
     };
     int p1ShipCount = 10;
-
     char status[256] = "Субмарины и мины расставлены.";
     int currentPlayer = 0;
 
@@ -276,7 +277,6 @@ int main(void) {
     initBoard(p1Fleet, '.');
     initBoard(p1Shots, '.');
     initBoard(p2Shots, '.');
-
     placeShips(p1Fleet, p1Ships, p1ShipCount);
 
     while (1) {
@@ -285,22 +285,22 @@ int main(void) {
         /* Проверка победы 1-го игрока (по количеству отмеченных попаданий) */
         if (countHitsOnBoard(p1Shots) >= TOTAL_SHIP_CELLS) {
             printf("\nВсе субмарины второго Юнги потоплены! Победа первого!\n\n"
-                   "   Юнга 1   \n"
-                   "  +--------+   Юнга 2   \n"
-                   "  | 1место |  +--------+\n"
-                   "  |        |  | 2место |\n"
-                   "  +--------+  +--------+\n");
+                   "  Юнга 1  \n"
+                   "+--------+    Юнга 2  \n"
+                   "| 1место |  +--------+\n"
+                   "|        |  | 2место |\n"
+                   "+--------+  +--------+\n");
             break;
         }
 
         /* Проверка победы 2-го игрока */
         if (allShipsSunk(p1Ships, p1ShipCount)) {
             printf("\nВсе субмарины первого Юнги потоплены! Победа второго!\n\n"
-                   "   Юнга 2   \n"
-                   "  +--------+   Юнга 1   \n"
-                   "  | 1место |  +--------+\n"
-                   "  |        |  | 2место |\n"
-                   "  +--------+  +--------+\n");
+                   "  Юнга 2  \n"
+                   "+--------+    Юнга 1  \n"
+                   "| 1место |  +--------+\n"
+                   "|        |  | 2место |\n"
+                   "+--------+  +--------+\n");
             break;
         }
 
@@ -315,13 +315,12 @@ int main(void) {
             clearInputBuffer();
             printf("Запиши 1 или 2!\n");
         }
-
         if (currentPlayer == 1) {
-            takeManualShotP1(p1Shots, status);
-        } else {
-            takeAutoShotP2(p1Fleet, p2Shots, p1Ships, p1ShipCount, status);
-        }
-    }
-
-    return 0;
+takeManualShotP1(p1Shots, status);
+} else {
+takeAutoShotP2(p1Fleet, p2Shots, p1Ships, p1ShipCount, status);
 }
+}
+return 0;
+}
+
